@@ -153,9 +153,10 @@ uint32_t RxDecoder::validateSignal(rmt_symbol_word_t *item, size_t &len) {
 			//Serial.printf("FAIL: i:%d, num_bits_found: %d, d0:%d, d1:%d, L0:%d L1:%d\n",
 			//i, num_bits_found, item[i].duration0, item[i].duration1, item[i].level0, item[i].level1);
 
-			//something went sideways. From looking at the data dumps it seems to usually mean
-			//that some crappy data snuck in. We can keep trying though - most fobs send the signal 3 times
-			// find the next header and keep going.
+			//something went sideways. From looking at the data dumps, it usually means
+			//some crappy data snuck in (no surprise there - these RF receivers pick up lots of garbage). 
+			//We can keep trying though - most fobs send the signal 3 times,
+			//so find the next header and keep trying.
 			header_pos = checkHeaderWord(item, len, i);
 			if (header_pos < 0 ) return 0;
 			// We found another header. Now do something evil in a "for" loop: Adjust the counter. I'm sorry.
@@ -198,7 +199,7 @@ int8_t RxDecoder::checkHeaderWord(rmt_symbol_word_t *item, size_t &len, uint8_t 
 		} 
 	}
 
-	//if we got here, well...we never found the header. Return a value greater than the length.
+	//if we got here, well...we never found the header. 
 	//Serial.printf("header not found counter was %i, len-bitlength was:%d \n", i, len-BIT_LENGTH-1,len);
 	//rxDataDump(len, item);
 	return(-1);

@@ -38,7 +38,7 @@ int32_t abs_int32_t(int32_t arg){
 }  
 //#define _EXAMPLE_ADC_UNIT_STR(unit) #unit
 //#define EXAMPLE_ADC_UNIT_STR(unit) _EXAMPLE_ADC_UNIT_STR(unit)
-#define ADC_ATTEN ADC_ATTEN_DB_0
+#define ADC_ATTEN ADC_ATTEN_DB_12 //ADC_ATTEN_DB_12
 #define ADC_BIT_WIDTH SOC_ADC_DIGI_MAX_BITWIDTH
 
 #if CONFIG_IDF_TARGET_ESP32 || CONFIG_IDF_TARGET_ESP32S2
@@ -48,7 +48,7 @@ int32_t abs_int32_t(int32_t arg){
 #else
 #define ADC_OUTPUT_TYPE ADC_DIGI_OUTPUT_FORMAT_TYPE2
 #define ADC_GET_CHANNEL(p_data) ((p_data)->type2.channel)
-#define ADC_GET_DATA(p_data) ((p_data)->type2.data)
+#define ADC_GET_DATA(p_data) ((uint32_t)((p_data)->type2.data))
 #endif
  
 #define TAG "ADC_AUDIO_READ"
@@ -149,7 +149,7 @@ void AudioADCProcessor::continuous_adc_init() {
 //exponential moving avereage EMA_BW -
 // the lower the number, the better the response, but more noise
 #define EMA_BW 4
-
+#define DEBUG_AUDIO_FILTER
 void AudioADCProcessor::readAndProcessAdc (void *parameters) {
 	uint8_t adc_buf[ADC_MAX_STORE_BUF_SZ];
 	uint32_t ema_filtered_data[ADC_MAX_STORE_BUF_SZ];
@@ -165,8 +165,8 @@ void AudioADCProcessor::readAndProcessAdc (void *parameters) {
 
 
 	for (;;) {
-			int32_t max  = -10000;
-	int32_t min = 10000;
+	//int32_t max  = -10000;
+	//int32_t min = 10000;
 		//can remove once the adc_stop is removed
 		//ESP_ERROR_CHECK(adc_continuous_start(adc_handle));
 
@@ -175,9 +175,10 @@ void AudioADCProcessor::readAndProcessAdc (void *parameters) {
 		// read ADC and fill the buffer
 		tot_read_num = 0;
 		//int64_t previous_us{esp_timer_get_time()};
-		do {
-			//ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-		
+	   //adc_continuous_read(adc_handle, adc_buf, ADC_CONV_FRAME_SZ, &ret_num, 0);
+	
+	   do {
+			//ulTaskNotifyTake(pdTRUE, portMAX_DELAY);	
 			ADC_READ_CHECK(adc_continuous_read(
 				AudioADCProcessor::adc_handle, adc_buf + tot_read_num,
 				ADC_CONV_FRAME_SZ * SOC_ADC_DIGI_RESULT_BYTES - tot_read_num, &ret_num,
@@ -189,33 +190,32 @@ void AudioADCProcessor::readAndProcessAdc (void *parameters) {
 		// run the data thru the filter, apply a moving average, then export
 		// the data to the array the jaw will use.
 		for (int i=0, j=0; i<ADC_MAX_STORE_BUF_SZ; j++, i+=SOC_ADC_DIGI_RESULT_BYTES)
+		//for (int i=0, j= 0;  i<ret_num; j++, i+=SOC_ADC_DIGI_RESULT_BYTES)
 		{
 			p = (adc_digi_output_data_t *)&adc_buf[i]; //range = 0-4096 (3.3v)
-			data = ADC_GET_DATA(p) - 2048; //normalize the data to -2048 > data < +2048 (from 0-4096)
+			data = (int32_t)(ADC_GET_DATA(p)) - 2048; //normalize the data to -2048 > data < +2048 (from 0-4096)
 			filtered_data_abs = applyfilter(data<<pad); // multiply by pad (amplify to decrease loss of LSBs)
 			filtered_data_abs =  filtered_data_abs >>pad; //divide by pad (take the pad back out)
 			ema_filter -= ema_filter >> EMA_BW; // moving average.
     		ema_filter += filtered_data_abs; // finish moving avg.
-			if (ema_filter > max){max = ema_filter;} else if (ema_filter < min) {min = ema_filter;}
-
-			ema_filtered_data[j] = ema_filter>> EMA_BW; //yes, bitshift by EMA_BW a second time. Has to be divided by (2^EMA_BW) to use
-			// debug:
-			//Serial.printf("adc %d\t data: %d \tfiltered EMA'd data %d\n", ADC_GET_DATA(p), data, ema_filtered_data[j] );
-
+			ema_filtered_data[j] = ema_filter >> EMA_BW; //yes, bitshift by EMA_BW a second time. Has to be divided by (2^EMA_BW) to use
+			//if (max < (int32_t)ema_filtered_data[j]){max = ema_filtered_data[j] ;} else if (ema_filtered_data[j] < min) {min = ema_filtered_data[j];}
+			//Serial.printf("adc %d\t data: %d \tfiltered EMA'd data %d \t abs data %d\n", ADC_GET_DATA(p), data, ema_filtered_data[j], filtered_data_abs );
 		}
 		
 		xSemaphoreTake(AudioADCProcessor::adcMutex, portMAX_DELAY);
 		memcpy(AudioADCProcessor::processedAdcData, ema_filtered_data, sizeof(AudioADCProcessor::processedAdcData));
+
 		xSemaphoreGive(AudioADCProcessor::adcMutex);
 		//int64_t final_us{esp_timer_get_time()};
 
- 		Serial.printf("max %d \t min %d\n", max, min);
+ 		//Serial.printf("max %d \t min %d\n", max, min);
 		
 	// Stop ADC and read till empty (might print error message that ADC is
     // already stopped since print before takes long)
     //adc_continuous_stop(AudioADCProcessor::adc_handle);
     //while (adc_continuous_read(AudioADCProcessor::adc_handle, adc_buf, ADC_MAX_STORE_BUF_SZ, &ret_num,	0) == ESP_OK)
-     // ;
+    //;
 
     // Restart ADC
     //previous_us = esp_timer_get_time();
@@ -229,11 +229,11 @@ void AudioADCProcessor::readAndProcessAdc (void *parameters) {
 *  with the following parameters:
 *  Type: Elliptical
 *  Form: Bandpass
-*  Order: 3
+*  Order: 4
 *  Samplerate: 22100
-*  Cutoff: 1200 (hz)
-*  Ripple: .1
-*  SB-Ripple: -40
+*  Cutoff: 500(hz), used to be 1200 (hz), but I had better results at 500
+*  Ripple: .1  (if you change the filter type to elliptical)
+*  SB-Ripple: -40 (if you change the filter type to elliptical)
 *  Width 2000
 *
 *  Optimization strategy - Converted the output code into int32_t as follows:
@@ -246,34 +246,41 @@ void AudioADCProcessor::readAndProcessAdc (void *parameters) {
 *  IRAM_ATTR, which got me another 4x speed improvement.
 */
 
-#define NBQ 3
 #define REAL int32_t
-//#define NBQ 4
+#define NBQ 4
 #define SCALE 12
 #define FACT (1 << SCALE)
-double biquada[]={0.9381265762097598,-1.9111660260821415,0.74384984903955,-1.667545105768851,0.8251157012328133,-1.5817568598036085};
-double biquadb[]={1.0000000000000002,-1.9950679628179127,1,-0.8464423806747791,-1,0};
-REAL biquada_f[NBQ*2];
-REAL biquadb_f[NBQ*2];
-REAL gain = 1;
+#define BIQUAD_SIZE NBQ*2
+// the below are ranges were used for elliptical filter, with cuttoff at 1200hz. 
+double biquada[]={0.9734775933565408,-1.9354466102042138,0.8720439296852008,-1.807585345497667,0.7793830752725933,-1.5687958438026732,0.9201456190502246,-1.5294908736295505};
+double biquadb[]={0.9999999999999999,-1.98008833600583,0.9999999999999999,-1.9947985872439253,0.9999999999999999,-0.16661107833700373,0.9999999999999999,-1.2780586056483751};
+
+REAL biquada_f[BIQUAD_SIZE];
+REAL biquadb_f[BIQUAD_SIZE];
+
+REAL adc_gain = 1;
 
 int16_t counter = 0;
 
 void AudioADCProcessor::setup_coeff(){
 	int16_t i = 0;
-	int16_t len = NBQ * 2;
-	for(i=0; i<len; i++){
+	
+	for(i=0; i<BIQUAD_SIZE; i++){
 		biquada_f[i] = round(biquada[i]*FACT);
 		biquadb_f[i] = round(biquadb[i]*FACT);
 	}
-	gain = 64; // enter by hand, TODO change to bit shifts
+	adc_gain = 64; // enter by hand, TODO change to bit shifts
 }
 
 int indices[] = {0, 2, 5, 1, 4, 3, 3, 5, 8, 4, 7, 6, 6, 8, 11, 7, 10, 9, 9, 11, 14, 10, 13, 12,0}; /* last one is a dummy */
 
 // the number of array elements must be NBQ*3+3,
-//REAL z[]={0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}; //NBQ = 4
-REAL z[]={0,0,0,0,0,0,0,0,0,0,0,0}; //NBQ = 3 
+REAL z[]={0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}; 
+void AudioADCProcessor::resetfilter() {
+  memset( z, 0, sizeof(z));
+  setup_coeff();
+  return;
+}
 
 REAL IRAM_ATTR AudioADCProcessor::applyfilter(REAL v)
 {
@@ -283,11 +290,13 @@ REAL IRAM_ATTR AudioADCProcessor::applyfilter(REAL v)
 	REAL* b_idx = (REAL *) biquadb_f;
 
 	static REAL out;
-	out=v/gain;
+	out=v/adc_gain;
 	/* replaced for (int i=NBQ*3+2; i>0; i--) {z[i]=z[i-1];}  
     * the number of loops must be NBQ*3+2, (one less than the number of elements)
-	* but the ESP32 compiler is very poor with for loops, so, unroll for-loop.
+	* but the ESP32 compiler is very poor with for loops, so unroll for-loop.
 	*/
+	z[14] = z[13];
+    z[13] = z[12];
 	z[12] = z[11];
 	z[11] = z[10];
 	z[10] = z[9];
@@ -300,6 +309,7 @@ REAL IRAM_ATTR AudioADCProcessor::applyfilter(REAL v)
 	z[3] = z[2];
 	z[2] = z[1];
 	z[1] = z[0];
+
 	/* we have to unroll the for loop, but here's what it would look like:
 	*for (int i=0; i<NBQ; i++)
 	*{
@@ -313,9 +323,7 @@ REAL IRAM_ATTR AudioADCProcessor::applyfilter(REAL v)
 	*/
 	//I could have squeezed a few more usecs out
 	// by putting integers in rather than the pointers to indicies 
-	// Torai thought up, but keeping them in place 
-	// makes it easier to change the algorithm order to NB = 4 (or 2 or whatever).
-	// Besides, at this point, it's fast enough.
+	// Torai thought up, but at this point, it's fast enough.
 	z[*idx++]=out;
 	out+=*(z + *(idx++))* (*b_idx++) >> SCALE;
 	out-=*(z + *(idx++))* (*a_idx++) >> SCALE;
