@@ -15,11 +15,8 @@ How do you find out your average pulse width to stick in there? Well, either use
 My hardware:
 
 1. ESP32-S3-DEVKITC-1-N8R2 (WROOM-1); about $USD15 from Digikey
-2. 3DMakerWorld Adafruit Keyfob 4 Button RF Remote Control – 315MHz; about $USD10 off eBay
+2. 3DMakerWorld Adafruit Keyfob 4 Button RF Remote Control – 315MHz; about $USD10 off eBay. I also found an 8 button one for a few $USD more. I liked that one too.
 3. 315MHz transmitter/receiver kit; about $USD5 off eBay
-4. A breadboard.
-
-I wired everything together using wires taken from an ethernet cable and kept them as short as possible to keep the EMF to a minimum; those receivers are cheap and kind of noisy. I recommend adding an antenna to the receiver. I’m presently powering the receiver off the 5V and GND pins on the ESP32, but that will change when I put the final system together. 
 
 
 
