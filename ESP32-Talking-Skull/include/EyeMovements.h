@@ -38,17 +38,20 @@ uint16_t *blinkSpeedPtr;
 const uint8_t FAST_BLINK=3;
 const uint8_t MEDIUM_BLINK=2;
 const uint8_t SLOW_BLINK=1;
-uint16_t blinkSpeedSLOW[] = {1000, 1000};  // time to wait in each intervall
+const uint8_t NO_BLINK = 0;
+
+uint16_t blinkSpeedSLOW[] = {1000, 1000};  // time to wait in each interval
 uint16_t blinkSpeedMEDIUM[] =  {200, 200};
 uint16_t blinkSpeedFAST[] = {100, 100};
 uint8_t LEFT_EYE_PIN;
 uint8_t RIGHT_EYE_PIN;
-
+uint16_t blinkSpeed;
 class EyeMovements {
   private:
 
     // sets pointers to arrays -- this sets blink speed and pattern of LED eyes
-    void setBlinkSpeed(const uint16_t blinkSpeed) {
+    void setBlinkSpeed(const uint16_t l_blinkSpeed) {
+      blinkSpeed = l_blinkSpeed;
       //Serial.println(blinkPattern);  Serial.println(blinkSpeed);
       switch(blinkSpeed) {
         case FAST_BLINK:
@@ -60,6 +63,7 @@ class EyeMovements {
         case SLOW_BLINK:
           blinkSpeedPtr = &blinkSpeedSLOW[0];
           break;
+        case NO_BLINK:  
         default:
           break;
       } 
@@ -72,6 +76,7 @@ class EyeMovements {
         case SYNCH_BLINK: 
           blinkPatternPtr = &synchBlink[0];
           break;
+        case NO_BLINK: ///NO_BLINK is handled by blink_speed, not pattern
         default:
           break;  
       }
@@ -104,14 +109,18 @@ class EyeMovements {
     void bothEyesOn(){
       digitalWrite(RIGHT_EYE_PIN, HIGH);
       digitalWrite(LEFT_EYE_PIN, HIGH);
+      setBlinkSpeed(NO_BLINK);
     };
     void eyesOff(){
       digitalWrite(RIGHT_EYE_PIN, LOW);
       digitalWrite(LEFT_EYE_PIN, LOW);
+      setBlinkSpeed(NO_BLINK);
     };
 
     // executes the timing of LED eye blinks.
     void Blink() {
+      if (blinkSpeed == NO_BLINK) {return;}
+
       static uint32_t previousMillisEyes = 0;
       static byte blinkState = 1;
       uint32_t timeHack = millis();
@@ -125,15 +134,15 @@ class EyeMovements {
           case 0:
             digitalWrite(RIGHT_EYE_PIN, blinkPatternPtr[0]);
             digitalWrite(LEFT_EYE_PIN,  blinkPatternPtr[1]);
-            //Serial.print("Eye delta "); Serial.print(deltaEyes); Serial.print(" case 0, right: "); Serial.print(blinkPattern[0]); Serial.print(" left "); Serial.println(blinkPattern[1]);
+            //Serial.print("Eye delta "); Serial.print(deltaEyes); Serial.print(" case 0, right: "); Serial.print(blinkPatternPtr[0]); Serial.print(" left "); Serial.println(blinkPatternPtr[1]);
             break;
           case 1:
             digitalWrite(RIGHT_EYE_PIN, blinkPatternPtr[2]);
             digitalWrite(LEFT_EYE_PIN, blinkPatternPtr[3]);
-            //Serial.print("Eye delta "); Serial.print(deltaEyes); Serial.print(" case 1, right: "); Serial.print(blinkPattern[2]); Serial.print(" left "); Serial.println(blinkPattern[3]);
+            //Serial.print("Eye delta "); Serial.print(deltaEyes); Serial.print(" case 1, right: "); Serial.print(blinkPatternPtr[2]); Serial.print(" left "); Serial.println(blinkPatternPtr[3]);
             break;
           default: 
-            Serial.print("oops. State = "); Serial.println(blinkState);
+            //Serial.print("oops. State = "); Serial.println(blinkState);
             break;
         }
         previousMillisEyes = timeHack;

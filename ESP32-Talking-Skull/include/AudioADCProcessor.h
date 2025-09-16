@@ -38,6 +38,7 @@
 #define ADC_SAMPLE_RATE 22050
 #define ADC_MAX_STORE_BUF_SZ  ADC_CONV_FRAME_SZ*SOC_ADC_DIGI_DATA_BYTES_PER_CONV
 
+
 #ifndef ESP32
 #error esp32-audio-sampler can only be compiled on an ESP32
 #endif
@@ -52,16 +53,41 @@ class AudioADCProcessor{
   static adc_continuous_handle_t adc_handle;
   static uint32_t filteredVal;
   static uint32_t rawValue;
+  static uint32_t noise_floor;
   static TaskHandle_t s_task_handle;
   static void continuous_adc_init();
   static int32_t applyfilter(int32_t v);
   static void setup_coeff();
   static xSemaphoreHandle adcMutex;
+
   public:
   AudioADCProcessor(){};
 	~AudioADCProcessor(){};
   void begin ();
   void initialize(adc_unit_t p_adcUnit, adc_channel_t p_adcChannel, SemaphoreHandle_t *xMutexAdcSound);
+  void resetfilter();
+  
+  /**
+   * @brief noise floor must be between 0 and 4095
+   * @note anything outside this range will set to the noise floor to 4095
+  */
+  void setNoiseFloor(uint32_t floor) {
+    if (floor > 4095) {noise_floor = 4095;}
+    else {noise_floor = floor;}
+    return;
+  };
+  
+  /**
+   * @brief input volts must be between 0 and 3.3V; output will be between 0 and 4095
+   * @note This fxn just implements Digital Value = (Analog Voltage / Reference Voltage) * (Maximum Digital Value)
+  */
+  constexpr uint16_t convertVoltsToDigital(double volts) {
+    if ((volts > 3.3) || (volts < 0)) return 0;
+    double refVolts = 3.3;
+    uint16_t maxDigitalVal = 4095;
+    //Digital Value = (Analog Voltage / Reference Voltage) * (Maximum Digital Value)
+    return((volts/refVolts)*maxDigitalVal);
+  };
   static void readAndProcessAdc (void *parameters);
   static uint32_t processedAdcData[ADC_CONV_FRAME_SZ];
 };
